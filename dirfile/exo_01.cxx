@@ -88,7 +88,7 @@ try{
             
 			
 		Write(pipefd1[1], requeteEnv, 7);
-        waitpid();
+        waitpid(pidFils, NULL, 0);
         
 		
 		

@@ -196,7 +196,7 @@ int main(int argc, char * argv []) {
                     char requeteChar[requete.size()];
                     strcpy(requeteChar, requete.c_str());
                             
-                    Write(pipefd1[1], requeteChar, requete.size());
+                    Write(pipefd1[1], requeteChar, requete.size()); // ecriture pipe
                     Waitpid(pidFils);
                 
             
@@ -204,14 +204,14 @@ int main(int argc, char * argv []) {
             }
             else { // dans le fils
                 Close(pipefd1[1]);// ferme ecriture
-                Read(pipefd1[0], requeteRecue, Nbuff);
+                Read(pipefd1[0], requeteRecue, Nbuff); // lecture pipe
                     cout << "dans le fils " << endl;
                 
                 cout << requeteRecue << endl;
                 string requete;
                 requete.assign(requeteRecue, 9);
                 vector<string> elements = split(requete, ' ');
-                if(verifRequete(elements)){
+                if(verifRequete(elements)){ // si requete valide
                     int day = elements[0][1] - '0'; 
                     string hour = elements[1];
                     string destination = elements[2];
@@ -224,14 +224,14 @@ int main(int argc, char * argv []) {
                     else{
                         maxPlaces = 6;
                     }
-                    if((MatReserv[day][indiceVoyage] <= maxPlaces - numberReserv)){
+                    if((MatReserv[day][indiceVoyage] <= maxPlaces - numberReserv)){ // si encore de la place
                         MatReserv[day][indiceVoyage] += numberReserv;
                     }
-                    else if((isFull())){
+                    else if((isFull())){ // Si tous les voyages pleins
                         Kill(getppid(),SIGUSR1);
                         exit(0);
                     }
-                    else{
+                    else{ // Si ce voyage plein
                         Kill(getppid(),SIGUSR2);
                         exit(0);
                     }
@@ -244,13 +244,13 @@ int main(int argc, char * argv []) {
                     cout << "requete invalide" << endl;
                     exit(0);
                 }
-                //Kill(getppid(),SIGUSR2);
+                
                 
                 
                 
                 
             }
-            //cout << "Valeur en fin de boucle : "<<MatReserv[0][0] << " pid : " << getpid() << endl;
+            
         }
 
     }

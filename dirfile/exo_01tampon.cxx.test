@@ -1,0 +1,217 @@
+/**
+ *
+ *  @File : exo_01_c.cxx
+ *
+ *  @Authors  : A. Dragut
+ *  @Synopsis : producteur et consommateurs (pere et fils) 
+ *
+ **/
+
+#include <string.h>
+#include <exception>
+#include <iostream>   
+#include <sys/types.h>      // pid_t 
+#include <stdlib.h>
+
+#include <unistd.h>         // SEEK_SET
+#include <fcntl.h>          // O_RDWR
+#include <signal.h>
+
+
+#include "nsSysteme.h"
+
+#include "CExc.h"
+
+using namespace nsSysteme;
+using namespace nsFctShell;
+using namespace std;
+namespace{
+
+    const int tailleTabOccur = 26;
+
+    volatile sig_atomic_t SignalArrive;
+    
+    void derout (int signum)  {
+	SignalArrive = 1;
+    }
+    
+    struct Resultat {
+	int  somme;
+	int  taboccur[tailleTabOccur];
+	bool qInt;
+    };
+}
+
+int main(int argc, char * argv []) {
+    try {
+	if(sizeof(Resultat) > PIPE_BUF) {
+	    throw CExc("main()","Ce programme risque de ne pas fonctionner sur ce systeme");
+	}
+	
+	struct sigaction act;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags   = 0;
+	act.sa_handler = derout;
+	Sigaction(SIGCHLD,&act,0);
+	
+	pid_t pidfils[2];
+	int   pipefd1[2]; // pipe de communication, pere parle
+	int   pipefd2[2]; // pipe de communication, pere parle
+	Pipe(pipefd1);
+	Pipe(pipefd2);
+	
+	int pipefd3[2];   // pipe de retour, pere ecoute
+	Pipe(pipefd3);
+	
+	bool qPere        (false);
+	bool qFilsChiffres(false);
+	
+	// creation des processus fils par duplication
+	for(int i = 0; i < 2; ++i) {
+	    if((pidfils[i] = Fork()) > 0) {
+		qPere = true;
+	    }
+	    else {
+		qFilsChiffres = (i == 0);
+		qPere         = false;
+		break;
+	    }
+	}
+	// execution du code de chaque processus (pere, fils1, fils2)
+	if(qPere) {
+	    string chaineLue;
+	    cout << "entrer une chaine de caracteres :" << endl;
+	    getline(cin, chaineLue); // enregistre ce qui arrive depuis l'entree standard
+	    const int nTotChars(chaineLue . size());
+	    Close(pipefd1[0]); // fermeture lecture
+	    Close(pipefd2[0]); // fermeture lecture
+	    Close(pipefd3[1]); // fermeture ecriture
+
+	    for(int i = 0; i < nTotChars; i++) {
+		const char caractereCourant(chaineLue[i]);
+		if(isdigit(caractereCourant)) {
+		    const int chiffre (caractereCourant-'0');
+		    Write(pipefd1[1],&chiffre,sizeof(int));//l'envoie au fils1
+		}
+		else if (isalpha(caractereCourant)) {
+		    Write(pipefd2[1],&caractereCourant ,sizeof(char));//l'envoie au fils2
+		}
+		else {
+		    cout << " charactere ignore: '" << caractereCourant << "' (ni chiffre ni lettre).\n";
+		}
+	    }
+	    Close (pipefd1[1]);
+	    Close (pipefd2[1]);
+	    // on ecrit EOF dans pipe1, pipe2
+	    // maintenant on recupere le resultat du travail de chaque fils
+	    // et on l'affiche
+	    for(int k(0); k<2; k++) {
+		Resultat resultatLu;
+		Read(pipefd3[0],&resultatLu,sizeof(resultatLu));
+		if(resultatLu . qInt) {
+		    cout << " La somme des chiffres rentres est : " << resultatLu . somme << endl;
+		}
+		else {
+		    for(int i(0) ; i < tailleTabOccur ; ++i) {
+			if(resultatLu . taboccur[i]) {
+			    cout << " occurence de '" << static_cast<char>('A'+i) << "' " 
+				 << resultatLu . taboccur[i] << endl;
+			}
+		    }
+		}
+	    }
+	    cout << " et maintenant on attend la fin des fils\n";
+	    int NbreFilsEnVie(2);
+	    while(NbreFilsEnVie) {
+		if (1 == SignalArrive) {
+		    SignalArrive = 0;
+		    for (int i(0); i < 2; ++i){
+			int status;
+			if(Waitpid(pidfils[i], &status, WNOHANG)>0) {
+			    NbreFilsEnVie--;
+			}
+			if (WIFEXITED(status)) {
+			    cout << WEXITSTATUS(status) << endl;
+			}
+			status=0;
+			if(Waitpid(pidfils[i], &status, WNOHANG)>0) {
+			    NbreFilsEnVie--;
+			}
+			if (WIFEXITED(status)) {
+			    cout << WEXITSTATUS(status) << endl;
+			}
+		    }
+		}
+		if(NbreFilsEnVie) {
+		    sigset_t Masque;
+		    sigemptyset(&Masque);
+		    sigsuspend(&Masque);
+		}
+	    }
+	    return 0;
+	} //fin pere
+	else {//fils 
+	    if (qFilsChiffres) { 
+		Close(pipefd1[1]);// fermeture ecriture
+		Close(pipefd2[1]);// fermeture ecriture
+		Close(pipefd2[0]);// fermeture lecture
+		Close(pipefd3[0]);// fermeture lecture
+	        Resultat resultat;
+		resultat . qInt  = 1;
+		resultat . somme = 0;
+		for(;;){
+		    int chiffre;
+		    if(0 == Read(pipefd1[0],&chiffre,sizeof(int))) {
+			break;
+			//jusqu'a ce qu'on lise le EOF (read renvoie 0), car pere doit faire close
+		    }
+		    resultat . somme += chiffre; // somme des chiffres
+		}
+		// pour le partage de pipe, comme PIPE_BUF octets sont lus/ecrit atomiquement, 
+		// si la taille du message est au plus PIPE_BUF il n'y a pas besoin de semaphore, autrement si
+		Write(pipefd3[1],&resultat, sizeof(resultat));
+		Close(pipefd3[1]);// fermeture ecriture
+		return 0;
+	    }	    
+	    else {// fils2 s'occupe des lettres
+		Close(pipefd1[1]);// fermeture ecriture
+		Close(pipefd1[0]);// fermeture lecture
+		Close(pipefd2[1]);// fermeture ecriture
+		Close(pipefd3[0]);// fermeture lecture
+		Resultat resultat;
+		resultat . qInt  = 0;
+		for(int k(0); k < tailleTabOccur; k++) {
+		    resultat . taboccur[k] = 0;
+		}
+		for (;;) {
+		    char charac;
+		    if(0 == Read(pipefd2[0],&charac,sizeof(char))) {
+			break;
+		    }
+		    const int caractindex(toupper(charac)-'A');
+		    if(caractindex >= 0 && caractindex < tailleTabOccur) {
+			resultat . taboccur[caractindex]++;
+		    }
+		}
+		// pour le partage de pipe, comme PIPE_BUF octets sont lus/ecrit atomiquement, 
+		// si la taille du message est au plus PIPE_BUF il n'y a pas besoin de semaphore, autrement si
+		Write(pipefd3[1],&resultat, sizeof(resultat));		
+		Close(pipefd3[1]);// fermeture ecriture
+		return 0;	
+	    }
+	} // fin des fils
+    }//fin try
+    catch (const CExc & Exc) {
+        cerr <<Exc<< endl;
+        return errno;
+    }
+    catch (const exception & Exc) {
+        cerr << "Exception : " << Exc.what () << endl;
+        return 1;
+    }
+    catch (...) {
+        cerr << "Exception inconnue recue dans la fonction main()" 
+             << endl;
+        return 1;
+    }
+}  //  main()

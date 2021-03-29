@@ -9,6 +9,7 @@
 #include <unistd.h>         // SEEK_SET
 #include <fcntl.h>          // O_RDWR
 #include <signal.h>
+#include <vector>
 
 
 #include "nsSysteme.h"
@@ -19,6 +20,7 @@
 using namespace nsSysteme;
 using namespace nsFctShell;
 using namespace std;
+using Matrice = vector<vector<int>> ; // creation de l'alias matrice associative
 namespace{
 
     
@@ -27,7 +29,11 @@ namespace{
 //    }
     
  // Init la map ici
+    int MatReserv[5][4];
+    
  
+
+    
  
  
  //Init les pipes
@@ -51,44 +57,49 @@ void ResaPleines(int numSignal){
 
 int main(int argc, char * argv []) {
 try{
-	
-
+	    
+    
 	
 	
 
  	if (1 != argc) {
     		throw CExc ("main()","Ce programme ne prend pas d'arguments");
     	}
-    	
-	pid_t pidFils;
-	Signal(SIGUSR1, ResaPleines);
-	Signal(SIGUSR2, ResaPrise);
+
+    MatReserv[0][0] = 0 ;
+    cout <<  MatReserv[0][0] << endl;
+    cout << "mon pid est " << getpid() << endl;	
+	pid_t pidFils; // pid du fils
+	Signal(SIGUSR1, ResaPleines); //deroutage erreur
+	Signal(SIGUSR2, ResaPrise);   //deroutage OK
 
 	int   pipefd1[2]; // pipe de communication, pere parle
 	Pipe(pipefd1);
 
 	const int Nbuff =7; char requeteRecue[Nbuff];
     string requete;
-
+    
+    
     while (true){
-        cout << "saisissez la requete : " << endl;
-        getline(cin, requete);
+    getline(cin, requete);
+    
 	
-	if((pidFils = Fork())){ // dans le pere
+	if(0 != (pidFils= Fork())){ // dans le pere
 		//Close(pipefd1[0]);// ferme lecture
+        //cout << "saisissez la requete : " << endl;
         
-		cout << "dans papa" << endl;
-		cout << getppid() << endl;
         
-		
-		
-			
-		
+        
+		cout << "dans le pere" << endl;
+        cout << "Valeur dans le pere : "<<MatReserv[0][0] << endl;
+
 		const char* requeteEnv = requete.c_str();
+        
             
 			
 		Write(pipefd1[1], requeteEnv, 7);
-        waitpid(pidFils, NULL, 0);
+        Waitpid(pidFils);
+        
         
 		
 		
@@ -96,13 +107,18 @@ try{
 	}
 	else { // dans le fils
 		//Close(pipefd1[1]);// ferme ecriture
-        
+        cout << "dans le fils " << endl;
 		Read(pipefd1[0], requeteRecue, Nbuff);
-		cout << getppid() << endl;
 		cout << requeteRecue << endl;
+        MatReserv[0][0] += 1;
+        cout << "Valeur dans le fils : "<<MatReserv[0][0] << endl;
  		kill(getppid(),SIGUSR2);
-        return 0;
+        
+        
+        
+        
 	}
+    cout << "Valeur en fin de boucle : "<<MatReserv[0][0] << " pid : " << getpid() << endl;
 }
 	
 	

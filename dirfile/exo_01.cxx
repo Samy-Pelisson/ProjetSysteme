@@ -68,31 +68,42 @@ try{
 	Pipe(pipefd1);
 
 	const int Nbuff =7; char requeteRecue[Nbuff];
+    string requete;
+
+    while (true){
+        cout << "saisissez la requete : " << endl;
+        getline(cin, requete);
 	
 	if((pidFils = Fork())){ // dans le pere
-		Close(pipefd1[0]);
+		//Close(pipefd1[0]);// ferme lecture
+        
 		cout << "dans papa" << endl;
+		cout << getppid() << endl;
+        
 		
-		while (true)
-		{
-			/* code */
-			cout << "saisissez la requete : " << endl;
-			string requete;
-			getline(cin, requete);
-			const char* requeteEnv = requete.c_str();
+		
 			
-			Write(pipefd1[1], requeteEnv, 7);
-		}
+		
+		const char* requeteEnv = requete.c_str();
+            
+			
+		Write(pipefd1[1], requeteEnv, 7);
+        waitpid();
+        
+		
 		
 	
 	}
-	else{ // dans le fils
-		Close(pipefd1[1]);
+	else { // dans le fils
+		//Close(pipefd1[1]);// ferme ecriture
+        
 		Read(pipefd1[0], requeteRecue, Nbuff);
 		cout << getppid() << endl;
 		cout << requeteRecue << endl;
  		kill(getppid(),SIGUSR2);
+        return 0;
 	}
+}
 	
 	
 

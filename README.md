@@ -1,4 +1,11 @@
 # ProjetSysteme
+## Forme de la requete
+  Chaque argument est séparé d'un espace
+  - Jour "Jx"
+  - Heure sous format nombre, sans h "22"
+  - Destination "T" ou "M"
+  - Nombre de places reservées allant de 1 à 4
+
 Programme client-serveur communiquant ainsi :
   - Pere->Fils : Pipe anonyme
   - Fils->Pere : Signaux déroutés
